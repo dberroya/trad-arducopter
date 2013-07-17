@@ -86,18 +86,32 @@ static void auto_disarm_check()
 {
     static uint8_t auto_disarming_counter;
 
-    if((control_mode <= ACRO) && (g.rc_3.control_in == 0) && motors.armed()) {
-        auto_disarming_counter++;
+    #if FRAME_CONFIG == HELI_FRAME
+        if((control_mode == STABILIZE) && (g.rc_3.control_in == 0) && motors.armed()) {
+            auto_disarming_counter++;
 
-        if(auto_disarming_counter == AUTO_DISARMING_DELAY) {
-            init_disarm_motors();
-        }else if (auto_disarming_counter > AUTO_DISARMING_DELAY) {
-            auto_disarming_counter = AUTO_DISARMING_DELAY + 1;
+            if(auto_disarming_counter == AUTO_DISARMING_DELAY) {
+                init_disarm_motors();
+            }else if (auto_disarming_counter > AUTO_DISARMING_DELAY) {
+                auto_disarming_counter = AUTO_DISARMING_DELAY + 1;
+            }
+        }else{
+            auto_disarming_counter = 0;
         }
-    }else{
-        auto_disarming_counter = 0;
-    }
-}
+    #else
+        if((control_mode <= ACRO) && (g.rc_3.control_in == 0) && motors.armed()) {
+            auto_disarming_counter++;
+
+            if(auto_disarming_counter == AUTO_DISARMING_DELAY) {
+                init_disarm_motors();
+            }else if (auto_disarming_counter > AUTO_DISARMING_DELAY) {
+                auto_disarming_counter = AUTO_DISARMING_DELAY + 1;
+            }
+        }else{
+            auto_disarming_counter = 0;
+        }
+    #endif // HELI_FRAME
+ }
 
 // init_arm_motors - performs arming process including initialisation of barometer and gyros
 static void init_arm_motors()

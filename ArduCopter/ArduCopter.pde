@@ -1,7 +1,12 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduCopter Version 3.0.1"
+#define THISFIRMWARE "ArduCopter Version 3.0.1-th01"
 /*
+ *  Merging:  Robert, Joly and Leonard traditional heli mods 
+ *   per github.com/jolyboy/ardupilot/commits/New_Rate_Controller commit list
+ *   with Daniel's minor enahancements: AD_WPNav: added WPNAV_STPG_LSH 
+ *    Copter: added FLTMODE_SSPD and Copter: added FLTAUTO_MINTOA 
+ *  baseline:  ArduCopter Version 3.0.1
  *  ArduCopter Version 3.0
  *  Creator:        Jason Short
  *  Lead Developer: Randy Mackay
@@ -569,11 +574,11 @@ static float target_alt_for_reporting;      // target altitude in cm for reporti
 static int32_t roll_axis;
 static int32_t pitch_axis;
 
-// Filters
+// Filters   
 #if FRAME_CONFIG == HELI_FRAME
-static LowPassFilterFloat rate_roll_filter;    // Rate Roll filter
-static LowPassFilterFloat rate_pitch_filter;   // Rate Pitch filter
-// LowPassFilterFloat rate_yaw_filter;     // Rate Yaw filter
+//static LowPassFilterFloat rate_roll_filter;    // Rate Roll filter
+//static LowPassFilterFloat rate_pitch_filter;   // Rate Pitch filter
+  static LowPassFilterFloat rate_dynamics_filter;// Rate Dynamics filter 
 #endif // HELI_FRAME
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1842,20 +1847,40 @@ void update_throttle_mode(void)
     if(ap.do_flip)     // this is pretty bad but needed to flip in AP modes.
         return;
 
-    // do not run throttle controllers if motors disarmed
+    // do not run throttle controllers if motors disarmed REMOVE THE FF
+   // if( !motors.armed() ) {
+   //     set_throttle_out(0, false);
+   //     throttle_accel_deactivate();    // do not allow the accel based throttle to override our command
+   //    set_target_alt_for_reporting(0);
+   //    return;
+   // }
+
+#if FRAME_CONFIG == HELI_FRAME
+
+	if (control_mode == STABILIZE){
+		motors.stab_throttle = true;
+	} else {
+		motors.stab_throttle = false;
+	}
+    
+    // allow swash collective to move if we are in manual throttle modes, even if disarmed
+    if( !motors.armed() ) {
+        if ( !(throttle_mode == THROTTLE_MANUAL) && !(throttle_mode == THROTTLE_MANUAL_TILT_COMPENSATED)){
+            throttle_accel_deactivate();    // do not allow the accel based throttle to override our command
+            return;
+        }
+    }
+
+#else // HELI_FRAME
+
+// do not run throttle controllers if motors disarmed
     if( !motors.armed() ) {
         set_throttle_out(0, false);
         throttle_accel_deactivate();    // do not allow the accel based throttle to override our command
         set_target_alt_for_reporting(0);
         return;
     }
-
-#if FRAME_CONFIG == HELI_FRAME
-	if (control_mode == STABILIZE){
-		motors.stab_throttle = true;
-	} else {
-		motors.stab_throttle = false;
-	}
+ 
 #endif // HELI_FRAME
 
     switch(throttle_mode) {
@@ -2140,7 +2165,7 @@ static void tuning(){
 
 #if FRAME_CONFIG == HELI_FRAME
     case CH6_HELI_EXTERNAL_GYRO:
-        motors.ext_gyro_gain = tuning_value;
+        motors.ext_gyro_gain = g.rc_6.control_in; 
         break;
 #endif
 

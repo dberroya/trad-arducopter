@@ -116,14 +116,15 @@
   # define HELI_YAW_FF					0  
   # define STABILIZE_THROTTLE			THROTTLE_MANUAL
   # define MPU6K_FILTER                 10
+  // # define HELI_CC_COMP                 ENABLED 
+  # define HELI_PIRO_COMP               DISABLED
+  # define HELI_CC_COMP                 DISABLED 
 #endif
-
 
 // optical flow doesn't work in SITL yet
 #ifdef DESKTOP_BUILD
 # define OPTFLOW DISABLED
 #endif
-
 
 //////////////////////////////////////////////////////////////////////////////
 // IMU Selection
