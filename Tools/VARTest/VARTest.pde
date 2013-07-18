@@ -30,6 +30,7 @@
 #include <AP_Relay.h>       // APM relay
 #include <AP_Camera.h>          // Photo or video camera
 #include <AP_Airspeed.h>
+#include <AP_SpdHgtControl.h>
 #include <memcheck.h>
 
 #include <APM_OBC.h>
@@ -377,3 +378,4 @@ void test_variable(AP_Param *ap, enum ap_var_type type)
 #endif
 
 AP_HAL_MAIN();
+

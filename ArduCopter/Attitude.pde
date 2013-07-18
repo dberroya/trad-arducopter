@@ -464,7 +464,11 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
                 roll_i = g.pid_rate_roll.get_integrator();
             }
         } else {
-            roll_i = g.pid_rate_roll.get_leaky_i(roll_rate_error, G_Dt, RATE_INTEGRATOR_LEAK_RATE);		// Flybarless Helis get huge I-terms. I-term controls much of the rate
+            if (dynamic_flight){
+                roll_i = g.pid_rate_roll.get_i(roll_rate_error, G_Dt);
+            } else {
+                roll_i = g.pid_rate_roll.get_leaky_i(roll_rate_error, G_Dt, RATE_INTEGRATOR_LEAK_RATE);
+            }
         }
     }
     
@@ -478,7 +482,11 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
                 pitch_i = g.pid_rate_pitch.get_integrator();
             }
         } else {
-            pitch_i = g.pid_rate_pitch.get_leaky_i(pitch_rate_error, G_Dt, RATE_INTEGRATOR_LEAK_RATE);	// Flybarless Helis get huge I-terms. I-term controls much of the rate
+            if (dynamic_flight){
+                pitch_i = g.pid_rate_pitch.get_i(pitch_rate_error, G_Dt);  
+            } else {
+                pitch_i = g.pid_rate_pitch.get_leaky_i(pitch_rate_error, G_Dt, RATE_INTEGRATOR_LEAK_RATE);
+            }
         }
     }
 
@@ -488,9 +496,8 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
 	roll_ff = g.heli_roll_ff * target_roll_rate;
     pitch_ff = g.heli_pitch_ff * target_pitch_rate;
     
-    // do piro comp
-    //if (HELI_PIRO_COMP == ENABLED && control_mode <= ACRO) {
-      if (!g.piro_comp_enable) {
+    // do piro comp, replaced if (HELI_PIRO_COMP == ENABLED && control_mode <= ACRO) {
+      if (g.piro_comp_enable == 1) {
         int32_t piro_roll_i, piro_pitch_i;
         
         piro_roll_i  = roll_i;
@@ -511,9 +518,8 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
     roll_output = roll_p + roll_i + roll_d + roll_ff;
     pitch_output = pitch_p + pitch_i + pitch_d + pitch_ff;
 
-    // Do cross-coupling compensation for low rpm helis
-    //if (HELI_CC_COMP == ENABLED) {
-    if (!g.cc_comp_enable) {
+    // Do cross-coupling compensation for low rpm helis, replaced if (HELI_CC_COMP == ENABLED) {
+    if (g.cc_comp_enable == 1) {
         //float cc_axis_ratio = 2.0f;
         //float cc_kp = 0.0002f;      
         //float cc_kd = 0.127f;  

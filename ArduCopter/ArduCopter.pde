@@ -1,13 +1,15 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduCopter Version 3.0.1-h01"
+#define THISFIRMWARE "ArduCopter Version 3.0.1-h02"
 /*
  *  Merging:  Robert, Joly and Leonard traditional heli mods 
  *   per github.com/jolyboy/ardupilot/commits/New_Rate_Controller commit list
  *   with Daniel's minor enahancements: AD_WPNav: added WPNAV_STPG_LSH 
  *    Copter: added FLTMODE_SSPD and Copter: added FLTAUTO_MINTOA 
- *  baseline:  ArduCopter Version 3.0.1
- *  ArduCopter Version 3.0
+ *
+ *  baseline:  7/18/2013 4:59 - ArduCopter Version 3.0.1 heli_development branch of RL
+ *
+ *  ArduCopter Version 3.0.1
  *  Creator:        Jason Short
  *  Lead Developer: Randy Mackay
  *  Based on code and ideas from the Arducopter team: Pat Hickey, Jose Julio, Jani Hirvinen, Andrew Tridgell, Justin Beech, Adam Rivera, Jean-Louis Naudin, Roberto Navoni
@@ -658,7 +660,11 @@ static uint8_t throttle_mode;
 static int16_t angle_boost;
 // counter to verify landings
 static uint16_t land_detector;
-
+// counter to control dynamic flight profile
+#if FRAME_CONFIG == HELI_FRAME
+  static uint8_t dynamic_flight_counter;
+  static bool dynamic_flight;
+#endif // HELI_FRAME 
 
 ////////////////////////////////////////////////////////////////////////////////
 // 3D Location vectors
@@ -1862,6 +1868,8 @@ void update_throttle_mode(void)
 	} else {
 		motors.stab_throttle = false;
 	}
+
+    check_dynamic_flight();
     
     // allow swash collective to move if we are in manual throttle modes, even if disarmed
     if( !motors.armed() ) {
@@ -1899,9 +1907,6 @@ void update_throttle_mode(void)
             update_throttle_cruise(motors.coll_out);
 			#else
 			update_throttle_cruise(pilot_throttle_scaled);
-			#endif  //HELI_FRAME
-
-
             // check if we've taken off yet
             if (!ap.takeoff_complete && motors.armed()) {
                 if (pilot_throttle_scaled > g.throttle_cruise) {
@@ -1909,6 +1914,7 @@ void update_throttle_mode(void)
                     set_takeoff_complete(true);
                 }
             }
+        #endif  //HELI_FRAME
         }
         set_target_alt_for_reporting(0);
         break;
@@ -1923,17 +1929,16 @@ void update_throttle_mode(void)
 
             // update estimate of throttle cruise
             #if FRAME_CONFIG == HELI_FRAME
-            update_throttle_cruise(motors.coll_out);
-			#else
-			update_throttle_cruise(pilot_throttle_scaled);
-			#endif  //HELI_FRAME
-
+               update_throttle_cruise(motors.coll_out);
+	    #else
+	       update_throttle_cruise(pilot_throttle_scaled);
             if (!ap.takeoff_complete && motors.armed()) {
                 if (pilot_throttle_scaled > g.throttle_cruise) {
                     // we must be in the air by now
                     set_takeoff_complete(true);
                 }
             }
+	    #endif  //HELI_FRAME
         }
         set_target_alt_for_reporting(0);
         break;
@@ -1976,6 +1981,36 @@ void update_throttle_mode(void)
     }
 }
 
+#if FRAME_CONFIG == HELI_FRAME
+static void check_dynamic_flight(void){
+    
+    if (!motors.armed() || throttle_mode == THROTTLE_LAND || motors.motor_runup_complete == false){
+        dynamic_flight_counter=0;
+        dynamic_flight=false;
+        return;
+    }
+    if (dynamic_flight_counter < 255){                                                      // check if we're in dynamic flight mode
+         if (!ap.takeoff_complete){
+            set_takeoff_complete(true);
+        } 
+        if (g.rc_3.servo_out > 800 || (labs(ahrs.pitch_sensor) > 2000)) {
+            dynamic_flight_counter++;
+        }
+        if (dynamic_flight_counter > 254){                                              // we must be in the air by now
+            dynamic_flight = true;
+        }
+    }
+    if (dynamic_flight_counter > 0){ 
+        if ((labs(ahrs.roll_sensor) < 1500) && (labs(ahrs.pitch_sensor) < 1500)) {
+            dynamic_flight_counter--;
+        }
+        if (dynamic_flight_counter < 1){
+            dynamic_flight = false;
+        }
+    }
+}
+#endif //  HELI_FRAME
+ 
 // set_target_alt_for_reporting - set target altitude in cm for reporting purposes (logs and gcs)
 static void set_target_alt_for_reporting(float alt_cm)
 {
