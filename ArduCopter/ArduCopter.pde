@@ -1967,8 +1967,13 @@ void update_throttle_mode(void)
             get_throttle_althold_with_slew(wp_nav.get_desired_alt(), -wp_nav.get_descent_velocity(), wp_nav.get_climb_velocity());
             set_target_alt_for_reporting(wp_nav.get_desired_alt()); // To-Do: return get_destination_alt if we are flying to a waypoint
         }else{
+#if FRAME_CONFIG == HELI_FRAME  
+            // collective pitch should not be full negative to avoid harshing the mechanics. Use Stab Coll Min.
+            set_throttle_out(motors.stab_col_min*10, false); 
+#else 
             // pilot's throttle must be at zero so keep motors off
             set_throttle_out(0, false);
+#endif // HELI_FRAME 
             set_target_alt_for_reporting(0);
         }
         break;
@@ -1990,10 +1995,11 @@ static void check_dynamic_flight(void){
         return;
     }
     if (dynamic_flight_counter < 255){                                                      // check if we're in dynamic flight mode
-         if (!ap.takeoff_complete){
-            set_takeoff_complete(true);
-        } 
-        if (g.rc_3.servo_out > 800 || (labs(ahrs.pitch_sensor) > 2000)) {
+        
+        if (g.rc_3.servo_out > 800 || (ahrs.pitch_sensor > 2000)) {
+            if (!ap.takeoff_complete){
+                set_takeoff_complete(true);
+            } 
             dynamic_flight_counter++;
         }
         if (dynamic_flight_counter > 254){                                              // we must be in the air by now

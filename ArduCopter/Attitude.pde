@@ -606,7 +606,11 @@ get_heli_rate_yaw(int32_t target_rate)
     if (pid_saturated){
         i = g.pid_rate_yaw.get_integrator();                    // Locked Integrator due to PID saturation on previous cycle
     } else {
-        i = g.pid_rate_yaw.get_i(rate_error, G_Dt);
+        if (motors.motor_runup_complete == true){
+            i = g.pid_rate_yaw.get_i(rate_error, G_Dt);
+        } else {
+            i = g.pid_rate_yaw.get_leaky_i(rate_error, G_Dt, RATE_INTEGRATOR_LEAK_RATE);  // If motor is not running use leaky I-term to avoid excessive build-up
+        } 
     }
 
     d = g.pid_rate_yaw.get_d(rate_error, G_Dt);
@@ -1056,7 +1060,17 @@ get_throttle_accel(int16_t z_target_accel)
 
     //
     // limit the rate
+#if FRAME_CONFIG == HELI_FRAME
+    if (ap.takeoff_complete == true){
+        output =  constrain_float(p+i+d+g.throttle_cruise, g.throttle_min, g.throttle_max);
+    } else {
+        // Avoid harshing the mechanics pushing into the ground
+        // stab_col_min should gently push down on the ground
+        output =  constrain_float(p+i+d+g.throttle_cruise, motors.stab_col_min*10, motors.stab_col_max*10);
+    }   
+#else 
     output =  constrain_float(p+i+d+g.throttle_cruise, g.throttle_min, g.throttle_max);
+#endif // HELI_FRAME
 
 #if LOGGING_ENABLED == ENABLED
     // log output if PID loggins is on and we are tuning the yaw
