@@ -362,7 +362,7 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Increment: 5
     // @Units: cm
     // @User: Standard
-    GSCALAR(min_toff_alt,  "FLTAUTO_MINTOA",      100.0f), 
+    GSCALAR(min_toff_alt,  "FLTAUTO_MINTOA",      100.0), 
     
     // @Param: SIMPLE
     // @DisplayName: Simple mode bitmask

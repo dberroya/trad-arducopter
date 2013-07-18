@@ -411,7 +411,7 @@ static int8_t control_mode = STABILIZE;
 // Used to maintain the state of the previous control switch position
 // This is set to -1 when we need to re-read the switch
 static uint8_t oldSwitchPosition;
-static RCMapper rcmap;
+static RCMapper rcmap;   
 
 // receiver RSSI
 static uint8_t receiver_rssi;

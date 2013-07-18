@@ -2,7 +2,7 @@
 
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
-
+#include <AP_RCMapper.h>        // RC input mapping library
 #include <AP_Common.h>
 
 // Global parameter class.
