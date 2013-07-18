@@ -106,7 +106,15 @@ public:
 		k_param_heli_pitch_ff,
 		k_param_heli_roll_ff,
 		k_param_heli_yaw_ff,
-
+        //
+        // Traditional Heli Data
+        //
+        k_param_piro_comp_enable,
+        k_param_cc_comp_enable,
+        k_param_cc_axis_ratio,
+        k_param_cc_kp_term,
+        k_param_cc_kd_term,  
+        
         //
         // 90: Motors
         //
@@ -334,6 +342,14 @@ public:
     AP_Int16        fltmode_swcgspd;
     //       minimum take-off altitude in cm
     AP_Float        min_toff_alt;
+    
+    // Trad Heli
+    //
+    AP_Int8         piro_comp_enable;
+    AP_Int8         cc_comp_enable;
+    AP_Float        cc_axis_ratio;
+    AP_Float        cc_kp_term;
+    AP_Float        cc_kd_term;
     
     // Misc
     //

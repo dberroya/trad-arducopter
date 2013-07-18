@@ -1,6 +1,6 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduCopter Version 3.0.1-th01"
+#define THISFIRMWARE "ArduCopter Version 3.0.1-h01"
 /*
  *  Merging:  Robert, Joly and Leonard traditional heli mods 
  *   per github.com/jolyboy/ardupilot/commits/New_Rate_Controller commit list

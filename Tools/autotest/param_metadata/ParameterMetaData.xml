@@ -1606,6 +1606,40 @@
       <Increment>1</Increment>
       <User>Standard</User>
     </H_STAB_COL_MAX>
+    <PIRO_ENABLE>
+      <DisplayName>Piro comp enable</DisplayName>
+      <Description> For helicopters only, enables or disables piro compensation</Description>
+      <Values>0:Disabled,1:Enable</Values>
+      <User>Standard</User>
+    </PIRO_ENABLE>
+    <CRSC_ENABLE>
+      <DisplayName>Cross coupling enable</DisplayName>
+      <Description> For helicopters only, enables or disables cross coupling compensation</Description>
+      <Values>0:Disabled,1:Enable</Values>
+      <User>Standard</User>
+    </CRSC_ENABLE>
+    <CRSC_AXIS_RT>
+      <DisplayName> Cross  coupling ratio</DisplayName>
+      <Description> For helicopters only, ratio of cross-coupling compensation on pitch vs roll axes. Number >1 means pitch is affected more than roll</Description>
+      <Range> 0.05 3.00</Range>
+      <Increment> 0.01</Increment>
+      <User>Standard</User>
+    </CRSC_AXIS_RT>
+    <CRSC_P>
+      <DisplayName> Cross coupling P term</DisplayName>
+      <Description> For helicopters only, compensation P term. Setting this to zero gives h_phang only, while increasing it will increase the p term of correction</Description>
+      <Range> 0.0000 0.1000</Range>
+      <Increment> 0.0001</Increment>
+      <User>Standard</User>
+    </CRSC_P>
+    <CRSC_D>
+      <DisplayName> Cross coupling D term</DisplayName>
+      <Description> For helicopters only, compensation D term, scaled. This accounts for flexing of the blades, dampers etc. Originally was (motors.ext_gyro_gain * 0.0001)</Description>
+      <Range> 0.0000 2.0000</Range>
+      <Units>1%</Units>
+      <Increment> 0.0001</Increment>
+      <User>Standard</User>
+    </CRSC_D>
     <MOT_SPIN_ARMED>
       <DisplayName>Motors always spin when armed</DisplayName>
       <Description>Controls whether motors always spin when armed</Description>

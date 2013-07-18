@@ -370,6 +370,44 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @User: Advanced
     GSCALAR(simple_modes, "SIMPLE",                 0),
 
+   // @Param: PIRO_ENABLE
+    // @DisplayName: Piro comp enable
+    // @Description: For helicopters only, enables or disables piro compensation
+    // @Values: 0:Disabled,1:Enabled
+    // @User:  Standard
+    GSCALAR(piro_comp_enable,    "PIRO_ENABLE",         0),
+
+    // @Param: CRSC_ENABLE
+    // @DisplayName: Cross coupling enable
+    // @Description: For helicopters only, enables or disables cross coupling compensation
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Standard
+    GSCALAR(cc_comp_enable,    "CRSC_ENABLE",         0),
+
+    // @Param: CRSC_AXIS_RT
+    // @DisplayName: Cross  coupling ratio
+    // @Description: For helicopters only, ratio of cross-coupling compensation on pitch vs roll axes. Number >1 means pitch is affected more than roll
+    // @Range: 0.05 3.00
+    // @Increment: 0.01
+    // @User: Standard
+    GSCALAR(cc_axis_ratio,    "CRSC_AXIS_RT",        2.0f),
+
+    // @Param: CRSC_P
+    // @DisplayName: Cross coupling P term
+    // @Description: For helicopters only, compensation p term. Setting this to zero gives h_phang only, while increasing it will increase the p term of correction
+    // @Range: 0.0000 0.1000
+    // @Increment: 0.0001
+    // @User: Standard
+    GSCALAR(cc_kp_term,    " CRSC_P",         0.0002f),
+
+    // @Param: CRSC_D
+    // @DisplayName: Cross coupling D term
+    // @Description: For helicopters only, compensation d term, scaled. This accounts for flexing of the blades, dampers etc. Originally was (motors.ext_gyro_gain * 0.0001)
+    // @Range: 0.000 2.000
+    // @Increment: 0.001
+    // @User: Standard
+    GSCALAR(cc_kd_term,    "CRSC_D",         0.127f),
+
     // @Param: LOG_BITMASK
     // @DisplayName: Log bitmask
     // @Description: 2 byte bitmap of log types to enable

@@ -489,7 +489,8 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
     pitch_ff = g.heli_pitch_ff * target_pitch_rate;
     
     // do piro comp
-    if (HELI_PIRO_COMP == ENABLED && control_mode <= ACRO) {
+    //if (HELI_PIRO_COMP == ENABLED && control_mode <= ACRO) {
+      if (!g.piro_comp_enable) {
         int32_t piro_roll_i, piro_pitch_i;
         
         piro_roll_i  = roll_i;
@@ -511,10 +512,14 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
     pitch_output = pitch_p + pitch_i + pitch_d + pitch_ff;
 
     // Do cross-coupling compensation for low rpm helis
-    if (HELI_CC_COMP == ENABLED) {
-        float cc_axis_ratio = 2.0f; // Ratio of compensation on pitch vs roll axes. Number >1 means pitch is affected more than roll
-        float cc_kp = 0.0002f;      // Compensation p term. Setting this to zero gives h_phang only, while increasing it will increase the p term of correction
-        float cc_kd = 0.127f;       // Compensation d term, scaled. This accounts for flexing of the blades, dampers etc. Originally was (motors.ext_gyro_gain * 0.0001)
+    //if (HELI_CC_COMP == ENABLED) {
+    if (!g.cc_comp_enable) {
+        //float cc_axis_ratio = 2.0f;
+        //float cc_kp = 0.0002f;      
+        //float cc_kd = 0.127f;  
+        float cc_axis_ratio = g.cc_axis_ratio; // Ratio of compensation on pitch vs roll axes. Number >1 means pitch is affected more than roll
+        float cc_kp = g.cc_kp_term;      // Compensation p term. Setting this to zero gives h_phang only, while increasing it will increase the p term of correction
+        float cc_kd = g.cc_kd_term;       // Compensation d term, scaled. This accounts for flexing of the blades, dampers etc. Originally was (motors.ext_gyro_gain * 0.0001)
         float cc_angle;
         float cc_total_output;
         uint32_t cc_roll_d;
