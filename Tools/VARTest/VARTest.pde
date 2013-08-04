@@ -378,4 +378,3 @@ void test_variable(AP_Param *ap, enum ap_var_type type)
 #endif
 
 AP_HAL_MAIN();
-

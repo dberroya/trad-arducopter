@@ -366,4 +366,3 @@ public:
 extern const AP_Param::Info var_info[];
 
 #endif // PARAMETERS_H
-

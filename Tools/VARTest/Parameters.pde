@@ -154,4 +154,3 @@ static void load_parameters(void)
 	    cliSerial->printf_P(PSTR("load_all took %luus\n"), hal.scheduler->micros() - before);
 	}
 }
-

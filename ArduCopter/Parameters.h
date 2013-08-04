@@ -2,7 +2,7 @@
 
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
-#include <AP_RCMapper.h>        // RC input mapping library
+
 #include <AP_Common.h>
 
 // Global parameter class.
@@ -106,14 +106,11 @@ public:
 		k_param_heli_pitch_ff,
 		k_param_heli_roll_ff,
 		k_param_heli_yaw_ff,
-        //
-        // Traditional Heli Data
-        //
-        k_param_piro_comp_enable,
-        k_param_cc_comp_enable,
-        k_param_cc_axis_ratio,
-        k_param_cc_kp_term,
-        k_param_cc_kd_term,  
+        //k_param_piro_comp_enable,
+        //k_param_cc_comp_enable,
+        //k_param_cc_axis_ratio,
+        //k_param_cc_kp_term,
+        //k_param_cc_kd_term, 
         
         //
         // 90: Motors
@@ -227,6 +224,9 @@ public:
         k_param_fltmode_swcgspd,
         //       minimum take-off altitude in cm
         k_param_min_toff_alt,
+        //      yaw look ahead min speed in cm/s
+        k_param_yaw_laminspd,
+        k_param_yaw_autosrate,
         
         //
         // 210: Waypoint data
@@ -342,14 +342,17 @@ public:
     AP_Int16        fltmode_swcgspd;
     //       minimum take-off altitude in cm
     AP_Float        min_toff_alt;
+    //       yaw look ahead min speed in cm/s, slew rate deg/s
+    AP_Int8         yaw_laminspd;
+    AP_Int8         yaw_autosrate;
     
     // Trad Heli
     //
-    AP_Int8         piro_comp_enable;
-    AP_Int8         cc_comp_enable;
-    AP_Float        cc_axis_ratio;
-    AP_Float        cc_kp_term;
-    AP_Float        cc_kd_term;
+    //AP_Int8         piro_comp_enable;
+    //AP_Int8         cc_comp_enable;
+    //AP_Float        cc_axis_ratio;
+    //AP_Float        cc_kp_term;
+    //AP_Float        cc_kd_term;
     
     // Misc
     //

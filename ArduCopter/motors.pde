@@ -10,6 +10,7 @@
 static void arm_motors_check()
 {
     static int16_t arming_counter;
+    bool allow_arming = false; 
 
     // ensure throttle is down
     if (g.rc_3.control_in > 0) {
@@ -17,8 +18,18 @@ static void arm_motors_check()
         return;
     }
 
-    // ensure we are in Stabilize, Acro or TOY mode
-    if ((control_mode > ACRO) && ((control_mode != TOY_A) && (control_mode != TOY_M))) {
+    // allow arming/disarming in ACRO, STABILIZE and TOY flight modes
+    if (control_mode == ACRO || control_mode == STABILIZE || control_mode == TOY_A || control_mode == TOY_M) {
+        allow_arming = true;
+    }
+
+    // allow arming/disarming in Loiter and AltHold if landed
+    if (ap.land_complete && (control_mode == LOITER || control_mode == ALT_HOLD)) {
+        allow_arming = true;
+    }
+
+    // kick out other flight modes
+    if (!allow_arming) { 
         arming_counter = 0;
         return;
     }
@@ -85,33 +96,22 @@ static void arm_motors_check()
 static void auto_disarm_check()
 {
     static uint8_t auto_disarming_counter;
+#if FRAME_CONFIG == HELI_FRAME   
+    if((control_mode < ACRO) && (g.rc_3.control_in == 0) && motors.armed()) {         //  Prevent auto disarm while in ACRO / Trad Heli
+#else 
+    if((control_mode <= ACRO) && (g.rc_3.control_in == 0) && motors.armed()) {
+#endif // HELI_FRAME
+      auto_disarming_counter++;
 
-    #if FRAME_CONFIG == HELI_FRAME
-        if((control_mode == STABILIZE) && (g.rc_3.control_in == 0) && motors.armed()) {
-            auto_disarming_counter++;
-
-            if(auto_disarming_counter == AUTO_DISARMING_DELAY) {
-                init_disarm_motors();
-            }else if (auto_disarming_counter > AUTO_DISARMING_DELAY) {
-                auto_disarming_counter = AUTO_DISARMING_DELAY + 1;
-            }
-        }else{
-            auto_disarming_counter = 0;
+        if(auto_disarming_counter == AUTO_DISARMING_DELAY) {
+            init_disarm_motors();
+        }else if (auto_disarming_counter > AUTO_DISARMING_DELAY) {
+            auto_disarming_counter = AUTO_DISARMING_DELAY + 1;
         }
-    #else
-        if((control_mode <= ACRO) && (g.rc_3.control_in == 0) && motors.armed()) {
-            auto_disarming_counter++;
-
-            if(auto_disarming_counter == AUTO_DISARMING_DELAY) {
-                init_disarm_motors();
-            }else if (auto_disarming_counter > AUTO_DISARMING_DELAY) {
-                auto_disarming_counter = AUTO_DISARMING_DELAY + 1;
-            }
-        }else{
-            auto_disarming_counter = 0;
-        }
-    #endif // HELI_FRAME
- }
+    }else{
+        auto_disarming_counter = 0;
+    }
+}
 
 // init_arm_motors - performs arming process including initialisation of barometer and gyros
 static void init_arm_motors()
@@ -235,6 +235,14 @@ static void pre_arm_checks(bool display_failure)
         }
         return;
     }
+    
+    // pre-arm check to ensure ch7 and ch8 have different functions
+    if ((g.ch7_option != 0 || g.ch8_option != 0) && g.ch7_option == g.ch8_option) { 
+        if (display_failure) {
+            gcs_send_text_P(SEVERITY_HIGH,PSTR("PreArm: Ch7&Ch8 Opt cannot be same"));
+        }
+        return;
+    } 
 
     // check accelerometers have been calibrated
     if(!ins.calibrated()) {

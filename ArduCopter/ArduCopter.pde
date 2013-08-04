@@ -1,15 +1,24 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduCopter Version 3.0.1-h02"
+#define THISFIRMWARE "ArduCopter V3.0.1-1.5h"
 /*
- *  Merging:  Robert, Joly and Leonard traditional heli mods 
- *   per github.com/jolyboy/ardupilot/commits/New_Rate_Controller commit list
- *   with Daniel's minor enahancements: AD_WPNav: added WPNAV_STPG_LSH 
- *    Copter: added FLTMODE_SSPD and Copter: added FLTAUTO_MINTOA 
  *
- *  baseline:  7/18/2013 4:59 - ArduCopter Version 3.0.1 heli_development branch of RL
+ *  With dberroya modifications
+ *  Last modified date  Aug 3, 2013
+ *  
+ *  Mods:  AC_WPNav.cpp, AC_WPNav.h added WPNAV_STPG_LSH parameter for stopping leash rate
+ *         Parameter FLTMODE_SSPD Minimum Mode Switching Speed, Contro_Modes.pde, Parameter.pde, Parameter.h 
+ *         Parameter FLTAUTO_MINTOA Minimum Auto-Takeoff Min Alt, commands_logic.pde, Parameter.pde, Parameter.h 
+ *         Parameter YAW_ASLEWRATE Yaw Slew Rate Speed, attitude.pde, Parameter.pde, Parameter.h 
+ *         Parameter YAW_LAMSPD Yaw Slew Rate min speed, attitude.pde, Parameter.pde, Parameter.h 
+ *         Main enhancesments:  RL and JS trad heli works - arducopter.pde and attitude.pde
  *
- *  ArduCopter Version 3.0.1
+ *    -   WIP: Add relative coordinates and logo command base waypoint programming functions
+ *
+ *  ACKNOWLEDGEMENTS AND SPECIAL THANKS :
+ *
+ *  Baseline: ArduCopter Version 3.0.1
+ *
  *  Creator:        Jason Short
  *  Lead Developer: Randy Mackay
  *  Based on code and ideas from the Arducopter team: Pat Hickey, Jose Julio, Jani Hirvinen, Andrew Tridgell, Justin Beech, Adam Rivera, Jean-Louis Naudin, Roberto Navoni
@@ -177,7 +186,7 @@ static DataFlash_Empty DataFlash;
 ////////////////////////////////////////////////////////////////////////////////
 // the rate we run the main loop at
 ////////////////////////////////////////////////////////////////////////////////
-static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_200HZ;
+static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_100HZ;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Sensors
@@ -368,9 +377,9 @@ static AP_RangeFinder_MaxsonarXL *sonar;
 static union {
     struct {
         uint8_t home_is_set         : 1; // 0
-        uint8_t simple_mode         : 1; // 1    // This is the state of simple mode
-        uint8_t manual_attitude     : 1; // 2
-        uint8_t manual_throttle     : 1; // 3
+        uint8_t simple_mode         : 2; // 1,2  // This is the state of simple mode : 0 = disabled ; 1 = SIMPLE ; 2 = SUPERSIMPLE
+        uint8_t manual_attitude     : 1; // 3
+        uint8_t manual_throttle     : 1; // 4 
 
         uint8_t pre_arm_rc_check    : 1; // 5    // true if rc input pre-arm checks have been completed successfully
         uint8_t pre_arm_check       : 1; // 6    // true if all pre-arm checks (rc, accel calibration, gps lock) have been performed
@@ -385,7 +394,7 @@ static union {
         uint8_t rc_override_active  : 1; // 14   // true if rc control are overwritten by ground station
         uint8_t do_flip             : 1; // 15   // Used to enable flip code
         uint8_t takeoff_complete    : 1; // 16
-        uint8_t land_complete       : 1; // 17
+        uint8_t land_complete       : 1; // 17   // true if we have detected a landing
         uint8_t compass_status      : 1; // 18
         uint8_t gps_status          : 1; // 19
     };
@@ -397,10 +406,11 @@ static struct AP_System{
     uint8_t GPS_light               : 1; // 0   // Solid indicates we have full 3D lock and can navigate, flash = read
     uint8_t arming_light            : 1; // 1   // Solid indicates armed state, flashing is disarmed, double flashing is disarmed and failing pre-arm checks
     uint8_t new_radio_frame         : 1; // 2   // Set true if we have new PWM data to act on from the Radio
-    uint8_t CH7_flag                : 1; // 3   // true if ch7 aux switch is high
-    uint8_t CH8_flag                : 1; // 4   // true if ch8 aux switch is high
-    uint8_t usb_connected           : 1; // 5   // true if APM is powered from USB connection
-    uint8_t yaw_stopped             : 1; // 6   // Used to manage the Yaw hold capabilities
+    uint8_t CH7_flag                : 2; // 3,4 // ch7 aux switch : 0 is low or false, 1 is center or true, 2 is high
+    uint8_t CH8_flag                : 2; // 5,6 // ch8 aux switch : 0 is low or false, 1 is center or true, 2 is high
+    uint8_t usb_connected           : 1; // 7   // true if APM is powered from USB connection
+    uint8_t yaw_stopped             : 1; // 8   // Used to manage the Yaw hold capabilities
+    uint8_t                         : 7; // 9-15 // Fill bit field to 16 bits 
 
 } ap_system;
 
@@ -413,7 +423,7 @@ static int8_t control_mode = STABILIZE;
 // Used to maintain the state of the previous control switch position
 // This is set to -1 when we need to re-read the switch
 static uint8_t oldSwitchPosition;
-static RCMapper rcmap;   
+static RCMapper rcmap;
 
 // receiver RSSI
 static uint8_t receiver_rssi;
@@ -576,11 +586,13 @@ static float target_alt_for_reporting;      // target altitude in cm for reporti
 static int32_t roll_axis;
 static int32_t pitch_axis;
 
-// Filters   
+// Filters
 #if FRAME_CONFIG == HELI_FRAME
-//static LowPassFilterFloat rate_roll_filter;    // Rate Roll filter
-//static LowPassFilterFloat rate_pitch_filter;   // Rate Pitch filter
-  static LowPassFilterFloat rate_dynamics_filter;// Rate Dynamics filter 
+ //static LowPassFilterFloat rate_roll_filter;    // Rate Roll filter
+ //static LowPassFilterFloat rate_pitch_filter;   // Rate Pitch filter
+ #if HELI_CC_COMP == ENABLED
+     static LowPassFilterFloat rate_dynamics_filter;// Rate Dynamics filter 
+ #endif
 #endif // HELI_FRAME
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -662,9 +674,10 @@ static int16_t angle_boost;
 static uint16_t land_detector;
 // counter to control dynamic flight profile
 #if FRAME_CONFIG == HELI_FRAME
-  static uint8_t dynamic_flight_counter;
-  static bool dynamic_flight;
+static uint8_t dynamic_flight_counter;
+static bool dynamic_flight;
 #endif // HELI_FRAME 
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // 3D Location vectors
@@ -948,7 +961,7 @@ void loop()
 
     // We want this to execute fast
     // ----------------------------
-    if (ins.num_samples_available() >= 2) {
+    if (ins.num_samples_available() >= 1) {
 
         // check loop time
         perf_info_check_loop_time(timer - fast_loopTimer);
@@ -965,12 +978,14 @@ void loop()
 
         // tell the scheduler one tick has passed
         scheduler.tick();
-    } else {
-        uint16_t dt = timer - fast_loopTimer;
-        if (dt < 10000) {
-            uint16_t time_to_next_loop = 10000 - dt;
-            scheduler.run(time_to_next_loop);
-        }
+
+        // run all the tasks that are due to run. Note that we only
+        // have to call this once per loop, as the tasks are scheduled
+        // in multiples of the main loop tick. So if they don't run on
+        // the first call to the scheduler they won't run on a later
+        // call until scheduler.tick() is called again
+        uint32_t time_available = (timer + 10000) - micros();
+        scheduler.run(time_available - 500); 
     }
 }
 
@@ -1047,6 +1062,9 @@ static void fifty_hz_loop()
     // -------------------------
     update_throttle_mode();
 
+    // check if we've landed
+    update_land_detector();
+ 
 #if TOY_EDF == ENABLED
     edf_toy();
 #endif
@@ -1345,8 +1363,6 @@ static void update_GPS(void)
     g_gps->update();
     update_GPS_light();
 
-    set_gps_healthy(g_gps->status() >= GPS::GPS_OK_FIX_3D);
-
     if (g_gps->new_data && last_gps_time != g_gps->time && g_gps->status() >= GPS::GPS_OK_FIX_2D) {
         // clear new data flag
         g_gps->new_data = false;
@@ -1470,6 +1486,10 @@ void update_yaw_mode(void)
     switch(yaw_mode) {
 
     case YAW_HOLD:
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        } 
         // heading hold at heading held in nav_yaw but allow input from pilot
         get_yaw_rate_stabilized_ef(g.rc_4.control_in);
         break;
@@ -1484,9 +1504,14 @@ void update_yaw_mode(void)
         break;
 
     case YAW_LOOK_AT_NEXT_WP:
-        // point towards next waypoint (no pilot input accepted)
-        // we don't use wp_bearing because we don't want the copter to turn too much during flight
-        nav_yaw = get_yaw_slew(nav_yaw, original_wp_bearing, AUTO_YAW_SLEW_RATE);
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        }else{
+            // point towards next waypoint (no pilot input accepted)
+            // we don't use wp_bearing because we don't want the copter to turn too much during flight
+            nav_yaw = get_yaw_slew(nav_yaw, original_wp_bearing, AUTO_YAW_SLEW_RATE);
+        } 
         get_stabilize_yaw(nav_yaw);
 
         // if there is any pilot input, switch to YAW_HOLD mode for the next iteration
@@ -1496,6 +1521,10 @@ void update_yaw_mode(void)
         break;
 
     case YAW_LOOK_AT_LOCATION:
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        } 
         // point towards a location held in yaw_look_at_WP
         get_look_at_yaw();
 
@@ -1506,6 +1535,10 @@ void update_yaw_mode(void)
         break;
 
     case YAW_CIRCLE:
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        } 
         // points toward the center of the circle or does a panorama
         get_circle_yaw();
 
@@ -1516,8 +1549,13 @@ void update_yaw_mode(void)
         break;
 
     case YAW_LOOK_AT_HOME:
-        // keep heading always pointing at home with no pilot input allowed
-        nav_yaw = get_yaw_slew(nav_yaw, home_bearing, AUTO_YAW_SLEW_RATE);
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        }else{
+            // keep heading always pointing at home with no pilot input allowed
+            nav_yaw = get_yaw_slew(nav_yaw, home_bearing, AUTO_YAW_SLEW_RATE);
+        } 
         get_stabilize_yaw(nav_yaw);
 
         // if there is any pilot input, switch to YAW_HOLD mode for the next iteration
@@ -1527,28 +1565,47 @@ void update_yaw_mode(void)
         break;
 
     case YAW_LOOK_AT_HEADING:
-        // keep heading pointing in the direction held in yaw_look_at_heading with no pilot input allowed
-        nav_yaw = get_yaw_slew(nav_yaw, yaw_look_at_heading, yaw_look_at_heading_slew);
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        }else{
+            // keep heading pointing in the direction held in yaw_look_at_heading with no pilot input allowed
+            nav_yaw = get_yaw_slew(nav_yaw, yaw_look_at_heading, yaw_look_at_heading_slew);
+        } 
         get_stabilize_yaw(nav_yaw);
         break;
 
 	case YAW_LOOK_AHEAD:
-		// Commanded Yaw to automatically look ahead.
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        } 
+	// Commanded Yaw to automatically look ahead.
         get_look_ahead_yaw(g.rc_4.control_in);
         break;
 
 #if TOY_LOOKUP == TOY_EXTERNAL_MIXER
     case YAW_TOY:
-        // update to allow external roll/yaw mixing
-        // keep heading always pointing at home with no pilot input allowed
-        nav_yaw = get_yaw_slew(nav_yaw, home_bearing, AUTO_YAW_SLEW_RATE);
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        }else{
+            // update to allow external roll/yaw mixing
+            // keep heading always pointing at home with no pilot input allowed
+            nav_yaw = get_yaw_slew(nav_yaw, home_bearing, AUTO_YAW_SLEW_RATE);
+        }
         get_stabilize_yaw(nav_yaw);
         break;
 #endif
 
     case YAW_RESETTOARMEDYAW:
-        // changes yaw to be same as when quad was armed
-        nav_yaw = get_yaw_slew(nav_yaw, initial_armed_bearing, AUTO_YAW_SLEW_RATE);
+        // if we are landed reset yaw target to current heading
+        if (ap.land_complete) {
+            nav_yaw = ahrs.yaw_sensor;
+        }else{
+            // changes yaw to be same as when quad was armed
+            nav_yaw = get_yaw_slew(nav_yaw, initial_armed_bearing, AUTO_YAW_SLEW_RATE);
+        } 
         get_stabilize_yaw(nav_yaw);
 
         // if there is any pilot input, switch to YAW_HOLD mode for the next iteration
@@ -1718,12 +1775,13 @@ void update_roll_pitch_mode(void)
         control_roll            = g.rc_1.control_in;
         control_pitch           = g.rc_2.control_in;
 
-        // update loiter target from user controls - max velocity is 5.0 m/s
+        // update loiter target from user controls
         wp_nav.move_loiter_target(control_roll, control_pitch,0.01f);
 
         // copy latest output from nav controller to stabilize controller
         nav_roll = wp_nav.get_desired_roll();
-        nav_pitch = wp_nav.get_desired_pitch();
+        nav_pitch = wp_nav.get_desired_pitch(); 
+
         get_stabilize_roll(nav_roll);
         get_stabilize_pitch(nav_pitch);
         break;
@@ -1776,8 +1834,8 @@ void update_simple_mode(void)
 // should be called after home_bearing has been updated
 void update_super_simple_bearing()
 {
-    // are we in SIMPLE mode?
-    if(ap.simple_mode && g.super_simple) {
+    // are we in SUPERSIMPLE mode?
+    if(ap.simple_mode == 2 || (ap.simple_mode && g.super_simple)) { 
         // get distance to home
         if(home_distance > SUPER_SIMPLE_RADIUS) {        // 10m from home
             // we reset the angular offset to be a vector from home to the quad
@@ -1818,8 +1876,7 @@ bool set_throttle_mode( uint8_t new_throttle_mode )
             break;
 
         case THROTTLE_LAND:
-            set_land_complete(false);   // mark landing as incomplete
-            land_detector = 0;          // A counter that goes up if our climb rate stalls out.
+            reset_land_detector();  // initialise land detector
             controller_desired_alt = get_initial_alt_hold(current_loc.alt, climb_rate);   // reset controller desired altitude to current altitude
             throttle_initialised = true;
             break;
@@ -1853,14 +1910,6 @@ void update_throttle_mode(void)
     if(ap.do_flip)     // this is pretty bad but needed to flip in AP modes.
         return;
 
-    // do not run throttle controllers if motors disarmed REMOVE THE FF
-   // if( !motors.armed() ) {
-   //     set_throttle_out(0, false);
-   //     throttle_accel_deactivate();    // do not allow the accel based throttle to override our command
-   //    set_target_alt_for_reporting(0);
-   //    return;
-   // }
-
 #if FRAME_CONFIG == HELI_FRAME
 
 	if (control_mode == STABILIZE){
@@ -1868,7 +1917,6 @@ void update_throttle_mode(void)
 	} else {
 		motors.stab_throttle = false;
 	}
-
     check_dynamic_flight();
     
     // allow swash collective to move if we are in manual throttle modes, even if disarmed
@@ -1888,7 +1936,7 @@ void update_throttle_mode(void)
         set_target_alt_for_reporting(0);
         return;
     }
- 
+    
 #endif // HELI_FRAME
 
     switch(throttle_mode) {
@@ -1903,10 +1951,10 @@ void update_throttle_mode(void)
             set_throttle_out(pilot_throttle_scaled, false);
 
             // update estimate of throttle cruise
-			#if FRAME_CONFIG == HELI_FRAME
+        #if FRAME_CONFIG == HELI_FRAME
             update_throttle_cruise(motors.coll_out);
-			#else
-			update_throttle_cruise(pilot_throttle_scaled);
+	#else
+	    update_throttle_cruise(pilot_throttle_scaled);
             // check if we've taken off yet
             if (!ap.takeoff_complete && motors.armed()) {
                 if (pilot_throttle_scaled > g.throttle_cruise) {
@@ -1928,17 +1976,18 @@ void update_throttle_mode(void)
             set_throttle_out(pilot_throttle_scaled, true);
 
             // update estimate of throttle cruise
-            #if FRAME_CONFIG == HELI_FRAME
-               update_throttle_cruise(motors.coll_out);
-	    #else
-	       update_throttle_cruise(pilot_throttle_scaled);
+      #if FRAME_CONFIG == HELI_FRAME
+            update_throttle_cruise(motors.coll_out);
+      #else
+	    update_throttle_cruise(pilot_throttle_scaled);
+	 
             if (!ap.takeoff_complete && motors.armed()) {
                 if (pilot_throttle_scaled > g.throttle_cruise) {
                     // we must be in the air by now
                     set_takeoff_complete(true);
                 }
             }
-	    #endif  //HELI_FRAME
+      #endif  //HELI_FRAME
         }
         set_target_alt_for_reporting(0);
         break;
@@ -1947,16 +1996,36 @@ void update_throttle_mode(void)
         if(ap.auto_armed) {
             // alt hold plus pilot input of climb rate
             pilot_climb_rate = get_pilot_desired_climb_rate(g.rc_3.control_in);
-            if( sonar_alt_health >= SONAR_ALT_HEALTH_MAX ) {
-                // if sonar is ok, use surface tracking
-                get_throttle_surface_tracking(pilot_climb_rate);    // this function calls set_target_alt_for_reporting for us
-            }else{
-                // if no sonar fall back stabilize rate controller
-                get_throttle_rate_stabilized(pilot_climb_rate);     // this function calls set_target_alt_for_reporting for us
+
+            // special handling if we have landed
+            if (ap.land_complete) {
+                if (pilot_climb_rate > 0) {
+                    // indicate we are taking off
+                    set_land_complete(false);
+                    // clear i term when we're taking off
+                    set_throttle_takeoff();
+                }else{
+                    // move throttle to minimum to keep us on the ground
+                    set_throttle_out(0, false);
+                    // deactivate accel based throttle controller (it will be automatically re-enabled when alt-hold controller next runs)
+                    throttle_accel_deactivate(); 
+                } 
+            }
+            // check land_complete flag again in case it was changed above
+            if (!ap.land_complete) {
+                if( sonar_alt_health >= SONAR_ALT_HEALTH_MAX ) {
+                    // if sonar is ok, use surface tracking
+                    get_throttle_surface_tracking(pilot_climb_rate);    // this function calls set_target_alt_for_reporting for us
+                }else{
+                    // if no sonar fall back stabilize rate controller
+                    get_throttle_rate_stabilized(pilot_climb_rate);     // this function calls set_target_alt_for_reporting for us
+                } 
             }
         }else{
             // pilot's throttle must be at zero so keep motors off
             set_throttle_out(0, false);
+            // deactivate accel based throttle controller
+            throttle_accel_deactivate(); 
             set_target_alt_for_reporting(0);
         }
         break;
@@ -1970,10 +2039,12 @@ void update_throttle_mode(void)
 #if FRAME_CONFIG == HELI_FRAME  
             // collective pitch should not be full negative to avoid harshing the mechanics. Use Stab Coll Min.
             set_throttle_out(motors.stab_col_min*10, false); 
-#else 
+#else   
             // pilot's throttle must be at zero so keep motors off
             set_throttle_out(0, false);
 #endif // HELI_FRAME 
+            // deactivate accel based throttle controller
+            throttle_accel_deactivate();
             set_target_alt_for_reporting(0);
         }
         break;
@@ -1994,20 +2065,20 @@ static void check_dynamic_flight(void){
         dynamic_flight=false;
         return;
     }
-    if (dynamic_flight_counter < 255){                                                      // check if we're in dynamic flight mode
+    if (dynamic_flight_counter < 100){                                                      // check if we're in dynamic flight mode
         
-        if (g.rc_3.servo_out > 800 || (ahrs.pitch_sensor > 2000)) {
+        if (g.rc_3.servo_out > 800 || (ahrs.pitch_sensor > -1500)) {
             if (!ap.takeoff_complete){
                 set_takeoff_complete(true);
-            } 
+            }
             dynamic_flight_counter++;
         }
-        if (dynamic_flight_counter > 254){                                              // we must be in the air by now
+        if (dynamic_flight_counter > 99){                                                  // we must be in the air by now
             dynamic_flight = true;
         }
     }
-    if (dynamic_flight_counter > 0){ 
-        if ((labs(ahrs.roll_sensor) < 1500) && (labs(ahrs.pitch_sensor) < 1500)) {
+    if (dynamic_flight_counter > 0){
+        if ((labs(ahrs.roll_sensor) < 1500) && (labs(ahrs.pitch_sensor) < 1200)) {
             dynamic_flight_counter--;
         }
         if (dynamic_flight_counter < 1){
@@ -2016,7 +2087,7 @@ static void check_dynamic_flight(void){
     }
 }
 #endif //  HELI_FRAME
- 
+
 // set_target_alt_for_reporting - set target altitude in cm for reporting purposes (logs and gcs)
 static void set_target_alt_for_reporting(float alt_cm)
 {
@@ -2206,7 +2277,11 @@ static void tuning(){
 
 #if FRAME_CONFIG == HELI_FRAME
     case CH6_HELI_EXTERNAL_GYRO:
-        motors.ext_gyro_gain = g.rc_6.control_in; 
+        #if HELI_CC_COMP == ENABLED
+           motors.ext_gyro_gain = g.rc_6.control_in;
+        #else
+           motors.ext_gyro_gain = tuning_value;
+        #endif
         break;
 #endif
 

@@ -129,8 +129,8 @@ const AP_Param::GroupInfo AP_MotorsHeli::var_info[] PROGMEM = {
 
     // @Param: COLYAW
     // @DisplayName: Collective-Yaw Mixing
-    // @Description: This is a feed-forward compensation to automatically add rudder input when collective pitch is increased.
-    // @Range: 0 5
+    // @Description: This is a feed-forward compensation to automatically add rudder input when collective pitch is increased. Can be positive or negative depending on mechanics.
+    // @Range: -10 10
     AP_GROUPINFO("COLYAW",          14,     AP_MotorsHeli,  collective_yaw_effect, 0),
 
     // @Param: GOV_SETPOINT
@@ -487,7 +487,8 @@ void AP_MotorsHeli::move_swash(int16_t roll_out, int16_t pitch_out, int16_t coll
 		
         // rudder feed forward based on collective
         if( !ext_gyro_enabled ) {
-            yaw_offset = collective_yaw_effect * abs(coll_out_scaled - throttle_mid);
+            //  yaw_offset = collective_yaw_effect * abs(coll_out_scaled - throttle_mid);
+        	yaw_offset = collective_yaw_effect * abs(coll_out_scaled - collective_mid + 1000);  //  Joly's latest bug fix
         }
     }
 
@@ -532,18 +533,19 @@ static long map(long x, long in_min, long in_max, long out_min, long out_max)
 
 
 void AP_MotorsHeli::rsc_control() {
-	
-	    if (armed() && (rsc_ramp >= rsc_ramp_up_rate)){                     // rsc_ramp will never increase if rsc_mode = 0
-	        if (motor_runup_timer < MOTOR_RUNUP_TIME){                      // therefore motor_runup_complete can never be true
-	            motor_runup_timer++;
-	        } else {
-	            motor_runup_complete = true;
-	        }
-	    } else {
-	        motor_runup_complete = false;                                   // motor_runup_complete will go to false if we
-	        motor_runup_timer = 0;                                          // disarm or wind down the motor
-	    }
-	
+
+    if (armed() && (rsc_ramp >= rsc_ramp_up_rate)){                     // rsc_ramp will never increase if rsc_mode = 0
+        if (motor_runup_timer < MOTOR_RUNUP_TIME){                      // therefore motor_runup_complete can never be true
+            motor_runup_timer++;
+        } else {
+            motor_runup_complete = true;
+        }
+    } else {
+        motor_runup_complete = false;                                   // motor_runup_complete will go to false if we
+        motor_runup_timer = 0;                                          // disarm or wind down the motor
+    }
+
+
     switch ( rsc_mode ) {
 
     case AP_MOTORSHELI_RSC_MODE_CH8_PASSTHROUGH:

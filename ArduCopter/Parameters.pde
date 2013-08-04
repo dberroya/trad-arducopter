@@ -194,7 +194,7 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Param: WP_YAW_BEHAVIOR
     // @DisplayName: Yaw behaviour during missions
     // @Description: Determines how the autopilot controls the yaw during missions and RTL
-    // @Values: 0:Never change yaw, 1:Face next waypoint, 2:Face next waypoint except RTL
+    // @Values: 0:Never change yaw, 1:Face next waypoint, 2:Face next waypoint except RTL, , 3:Always look ahead
     // @User: Advanced
     GSCALAR(wp_yaw_behavior,  "WP_YAW_BEHAVIOR",    WP_YAW_BEHAVIOR_DEFAULT),
 
@@ -362,51 +362,31 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Increment: 5
     // @Units: cm
     // @User: Standard
-    GSCALAR(min_toff_alt,  "FLTAUTO_MINTOA",      100.0), 
+    GSCALAR(min_toff_alt,  "FLTAUTO_MINTOA",      100.0f), 
+      
+    // @Param: YAW_LAMSPD
+    // @DisplayName: Yaw Look-Ahead Min Speed
+    // @Description:  Provides for the yaw look ahead minimum speed cm per second, recommneded range 100 to 1000 in increments of 10, requires reboot.
+    // @Range: 100 1000
+    // @Increment: 10
+    // @Units: cm/s
+    // @User: Standard
+    GSCALAR(yaw_laminspd,  "YAW_LAMSPD",      YAW_LOOK_AHEAD_MIN_SPEED), 
+    
+    // @Param: YAW_ASLEWRATE
+    // @DisplayName: Yaw Slew Rate Speed
+    // @Description:  Provides for the yaw slew rate speed in degrees per second, recommneded default 60, range 50 to 120 in increments of 10, requires reboot.
+    // @Range: 20 120
+    // @Increment: 10
+    // @Units: deg/s
+    // @User: Standard
+    GSCALAR(yaw_autosrate,  "YAW_ASLEWRATE",      AUTO_YAW_SLEW_RATE), 
     
     // @Param: SIMPLE
     // @DisplayName: Simple mode bitmask
     // @Description: Bitmask which holds which flight modes use simple heading mode (eg bit 0 = 1 means Flight Mode 0 uses simple mode)
     // @User: Advanced
     GSCALAR(simple_modes, "SIMPLE",                 0),
-
-    // @Param: PIRO_ENABLE
-    // @DisplayName: Piro comp enable
-    // @Description: For helicopters only, enables or disables piro compensation
-    // @Values: 0:Disabled,1:Enabled
-    // @User:  Standard
-    GSCALAR(piro_comp_enable,    "PIRO_ENABLE",         0),
-
-    // @Param: CRSC_ENABLE
-    // @DisplayName: Cross coupling enable
-    // @Description: For helicopters only, enables or disables cross coupling compensation
-    // @Values: 0:Disabled,1:Enabled
-    // @User: Standard
-    GSCALAR(cc_comp_enable,    "CRSC_ENABLE",         0),
-
-    // @Param: CRSC_AXIS_RT
-    // @DisplayName: Cross  coupling ratio
-    // @Description: For helicopters only, ratio of cross-coupling compensation on pitch vs roll axes. Number >1 means pitch is affected more than roll
-    // @Range: 0.05 3.00
-    // @Increment: 0.01
-    // @User: Standard
-    GSCALAR(cc_axis_ratio,    "CRSC_AXIS_RT",        2.0f),
-
-    // @Param: CRSC_P
-    // @DisplayName: Cross coupling P term
-    // @Description: For helicopters only, compensation p term. Setting this to zero gives h_phang only, while increasing it will increase the p term of correction
-    // @Range: 0.0000 0.1000
-    // @Increment: 0.0001
-    // @User: Standard
-    GSCALAR(cc_kp_term,    " CRSC_P",         0.0002f),
-
-    // @Param: CRSC_D
-    // @DisplayName: Cross coupling D term
-    // @Description: For helicopters only, compensation d term, scaled. This accounts for flexing of the blades, dampers etc. Originally was (motors.ext_gyro_gain * 0.0001)
-    // @Range: 0.000 2.000
-    // @Increment: 0.001
-    // @User: Standard
-    GSCALAR(cc_kd_term,    "CRSC_D",         0.127f),
 
     // @Param: LOG_BITMASK
     // @DisplayName: Log bitmask
@@ -460,14 +440,14 @@ const AP_Param::Info var_info[] PROGMEM = {
     // @Param: CH7_OPT
     // @DisplayName: Channel 7 option
     // @Description: Select which function if performed when CH7 is above 1800 pwm
-    // @Values: 0:Do Nothing, 2:Flip, 3:Simple Mode, 4:RTL, 5:Save Trim, 7:Save WP, 8:Multi Mode, 9:Camera Trigger, 10:Sonar, 12:ResetToArmedYaw
+    // @Values: 0:Do Nothing, 2:Flip, 3:Simple Mode, 4:RTL, 5:Save Trim, 7:Save WP, 8:Multi Mode, 9:Camera Trigger, 10:Sonar, 11:Fence, 12:ResetToArmedYaw, 13:Super Simple Mode
     // @User: Standard
     GSCALAR(ch7_option, "CH7_OPT",                  CH7_OPTION),
 
     // @Param: CH8_OPT
     // @DisplayName: Channel 8 option
     // @Description: Select which function if performed when CH8 is above 1800 pwm
-    // @Values: 0:Do Nothing, 2:Flip, 3:Simple Mode, 4:RTL, 5:Save Trim, 7:Save WP, 8:Multi Mode, 9:Camera Trigger, 10:Sonar, 12:ResetToArmedYaw 
+    // @Values: 0:Do Nothing, 2:Flip, 3:Simple Mode, 4:RTL, 5:Save Trim, 7:Save WP, 8:Multi Mode, 9:Camera Trigger, 10:Sonar, 11:Fence, 12:ResetToArmedYaw, 13:Super Simple Mode
     // @User: Standard
     GSCALAR(ch8_option, "CH8_OPT",                  CH8_OPTION),
 

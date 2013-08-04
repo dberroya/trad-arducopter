@@ -33,8 +33,9 @@
 // head definitions
 #define FLYBARLESS_HEAD 0
 #define FLYBAR_HEAD 1
+
 // motor run-up timer
-#define MOTOR_RUNUP_TIME 500 // 500 = 5 seconds 
+#define MOTOR_RUNUP_TIME 500 // 500 = 5 seconds
 
 class AP_HeliControls;
 
@@ -68,9 +69,9 @@ public:
 		_stab_throttle_scalar = 1;
         _swash_initialised = false;
 		stab_throttle = false;
-		motor_runup_complete = false; 
-		last_roll_output = 0;
-		last_pitch_output = 0; 
+        motor_runup_complete = false;
+        last_roll_output = 0;      //      Joly's CC code
+        last_pitch_output = 0;     //      Joly's CC code
     };
 
     RC_Channel      *_servo_1;
@@ -100,11 +101,11 @@ public:
 	AP_Int8 stab_col_min;						// collective pitch minimum in Stabilize Mode
 	AP_Int8 stab_col_max;						// collective pitch maximum in Stabilize Mode
 	bool stab_throttle;							// true if we are in Stabilize Mode for reduced Swash Range
-	bool motor_runup_complete;                  // true if the rotors have had enough time to wind up 
+    bool motor_runup_complete;                  // true if the rotors have had enough time to wind up
 	int16_t coll_out;							// returns the actual collective in use to the main code
-	int32_t last_roll_output;
-	int32_t last_pitch_output; 
-
+	int32_t last_roll_output;       			//      Joly's CC code
+	int32_t last_pitch_output;       			//      Joly's CC code
+	
     // init
     void Init();
 
@@ -158,7 +159,6 @@ protected:
     int16_t rsc_output;                         // final output to the external motor governor 1000-2000
     int16_t rsc_ramp;                           // current state of ramping
     int16_t motor_runup_timer;                  // timer to determine if motor has run up fully
-
 
 };
 

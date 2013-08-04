@@ -124,7 +124,7 @@ static void read_radio()
         hal.rcin->read(periods,8);
         g.rc_1.set_pwm(periods[rcmap.roll()-1]);
         g.rc_2.set_pwm(periods[rcmap.pitch()-1]);
-        
+
         set_throttle_and_failsafe(periods[rcmap.throttle()-1]);
 
         g.rc_4.set_pwm(periods[rcmap.yaw()-1]);

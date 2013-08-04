@@ -4,13 +4,13 @@ static void
 get_stabilize_roll(int32_t target_angle)
 {
     // angle error
-    target_angle            = wrap_180_cd(target_angle - ahrs.roll_sensor);
+    target_angle = wrap_180_cd(target_angle - ahrs.roll_sensor);
 
     // limit the error we're feeding to the PID
-    target_angle            = constrain_int32(target_angle, -4500, 4500);
+    target_angle = constrain_int32(target_angle, -4500, 4500);
 
     // convert to desired rate
-    int32_t target_rate = g.pi_stabilize_roll.get_pi(target_angle, G_Dt);
+    int32_t target_rate = g.pi_stabilize_roll.kP() * target_angle;
 
     // set targets for rate controller
     set_roll_rate_target(target_rate, EARTH_FRAME);
@@ -20,13 +20,13 @@ static void
 get_stabilize_pitch(int32_t target_angle)
 {
     // angle error
-    target_angle            = wrap_180_cd(target_angle - ahrs.pitch_sensor);
+    target_angle = wrap_180_cd(target_angle - ahrs.pitch_sensor);
 
     // limit the error we're feeding to the PID
-    target_angle            = constrain_int32(target_angle, -4500, 4500);
+    target_angle = constrain_int32(target_angle, -4500, 4500);
 
     // convert to desired rate
-    int32_t target_rate = g.pi_stabilize_pitch.get_pi(target_angle, G_Dt);
+    int32_t target_rate = g.pi_stabilize_roll.kP() * target_angle;
 
     // set targets for rate controller
     set_pitch_rate_target(target_rate, EARTH_FRAME);
@@ -35,25 +35,23 @@ get_stabilize_pitch(int32_t target_angle)
 static void
 get_stabilize_yaw(int32_t target_angle)
 {
-    int32_t target_rate,i_term;
+    int32_t target_rate;
     int32_t angle_error;
     int32_t output = 0;
 
     // angle error
-    angle_error             = wrap_180_cd(target_angle - ahrs.yaw_sensor);
+    angle_error = wrap_180_cd(target_angle - ahrs.yaw_sensor);
 
     // limit the error we're feeding to the PID
-
-    angle_error             = constrain_int32(angle_error, -4500, 4500);
+    angle_error = constrain_int32(angle_error, -4500, 4500);
 
     // convert angle error to desired Rate:
-    target_rate = g.pi_stabilize_yaw.get_p(angle_error);
-    i_term = g.pi_stabilize_yaw.get_i(angle_error, G_Dt);
+    target_rate = g.pi_stabilize_yaw.kP() * angle_error; 
 
     // do not use rate controllers for helicotpers with external gyros
 #if FRAME_CONFIG == HELI_FRAME
     if(motors.ext_gyro_enabled) {
-        g.rc_4.servo_out = constrain_int32((target_rate + i_term), -4500, 4500);
+         g.rc_4.servo_out = constrain_int32(target_rate, -4500, 4500);
     }
 #endif
 
@@ -63,13 +61,14 @@ get_stabilize_yaw(int32_t target_angle)
         pid_log_counter++;
         if( pid_log_counter >= 10 ) {               // (update rate / desired output rate) = (100hz / 10hz) = 10
             pid_log_counter = 0;
-            Log_Write_PID(CH6_STABILIZE_YAW_KP, angle_error, target_rate, i_term, 0, output, tuning_value);
+            Log_Write_PID(CH6_STABILIZE_YAW_KP, angle_error, target_rate, 0, 0, output, tuning_value);
         }
     }
 #endif
 
     // set targets for rate controller
-    set_yaw_rate_target(target_rate+i_term, EARTH_FRAME);
+    // set_yaw_rate_target(target_rate+i_term, EARTH_FRAME);
+    set_yaw_rate_target(target_rate, EARTH_FRAME);
 }
 
 static void
@@ -235,89 +234,6 @@ get_yaw_rate_stabilized_bf(int32_t stick_angle)
     set_yaw_rate_target(0, BODY_EARTH_FRAME);
 }
 
-
-// Roll with rate input and stabilized in the earth frame
-static void
-get_roll_rate_stabilized_ef(int32_t stick_angle)
-{
-    int32_t angle_error = 0;
-
-    // convert the input to the desired roll rate
-    int32_t target_rate = stick_angle * g.acro_p - (roll_axis * g.acro_balance_roll)/100;
-
-    // convert the input to the desired roll rate
-    roll_axis += target_rate * G_Dt;
-    roll_axis = wrap_180_cd(roll_axis);
-
-    // ensure that we don't reach gimbal lock
-    if (labs(roll_axis) > 4500 && g.acro_trainer_enabled) {
-        roll_axis	= constrain_int32(roll_axis, -4500, 4500);
-        angle_error = wrap_180_cd(roll_axis - ahrs.roll_sensor);
-    } else {
-        // angle error with maximum of +- max_angle_overshoot
-        angle_error = wrap_180_cd(roll_axis - ahrs.roll_sensor);
-        angle_error	= constrain_int32(angle_error, -MAX_ROLL_OVERSHOOT, MAX_ROLL_OVERSHOOT);
-    }
-
-#if FRAME_CONFIG == HELI_FRAME
-    if (!motors.motor_runup_complete) {
-        angle_error = 0;
-    } 
-#else 
-    // reset target angle to current angle if motors not spinning
-    if (!motors.armed() || g.rc_3.servo_out == 0) {
-        angle_error = 0;
-    }
-#endif // HELI_FRAME 
-
-    // update roll_axis to be within max_angle_overshoot of our current heading
-    roll_axis = wrap_180_cd(angle_error + ahrs.roll_sensor);
-
-    // set earth frame targets for rate controller
-	set_roll_rate_target(g.pi_stabilize_roll.get_p(angle_error) + target_rate, EARTH_FRAME);
-}
-
-// Pitch with rate input and stabilized in the earth frame
-static void
-get_pitch_rate_stabilized_ef(int32_t stick_angle)
-{
-    int32_t angle_error = 0;
-
-    // convert the input to the desired pitch rate
-    int32_t target_rate = stick_angle * g.acro_p - (pitch_axis * g.acro_balance_pitch)/100;
-
-    // convert the input to the desired pitch rate
-    pitch_axis += target_rate * G_Dt;
-    pitch_axis = wrap_180_cd(pitch_axis);
-
-    // ensure that we don't reach gimbal lock
-    if (labs(pitch_axis) > 4500) {
-        pitch_axis	= constrain_int32(pitch_axis, -4500, 4500);
-        angle_error = wrap_180_cd(pitch_axis - ahrs.pitch_sensor);
-    } else {
-        // angle error with maximum of +- max_angle_overshoot
-        angle_error = wrap_180_cd(pitch_axis - ahrs.pitch_sensor);
-        angle_error	= constrain_int32(angle_error, -MAX_PITCH_OVERSHOOT, MAX_PITCH_OVERSHOOT);
-    }
-    
-#if FRAME_CONFIG == HELI_FRAME
-    if (!motors.motor_runup_complete) {
-        angle_error = 0;
-    }
-#else   
-    // reset target angle to current angle if motors not spinning
-    if (!motors.armed() || g.rc_3.servo_out == 0) {
-        angle_error = 0;
-    }
-#endif // HELI_FRAME 
-
-    // update pitch_axis to be within max_angle_overshoot of our current heading
-    pitch_axis = wrap_180_cd(angle_error + ahrs.pitch_sensor);
-
-    // set earth frame targets for rate controller
-	set_pitch_rate_target(g.pi_stabilize_pitch.get_p(angle_error) + target_rate, EARTH_FRAME);
-}
-
 // Yaw with rate input and stabilized in the earth frame
 static void
 get_yaw_rate_stabilized_ef(int32_t stick_angle)
@@ -340,14 +256,14 @@ get_yaw_rate_stabilized_ef(int32_t stick_angle)
 
 #if FRAME_CONFIG == HELI_FRAME
     if (!motors.motor_runup_complete) {
-      angle_error = 0;
+    	angle_error = 0;
     }
-#else  
+#else   
     // reset target angle to current heading if motors not spinning
     if (!motors.armed() || g.rc_3.servo_out == 0) {
     	angle_error = 0;
     }
-#endif // HELI_FRAME 
+#endif // HELI_FRAME
 
     // update nav_yaw to be within max_angle_overshoot of our current heading
     nav_yaw = wrap_360_cd(angle_error + ahrs.yaw_sensor);
@@ -410,7 +326,7 @@ run_rate_controllers()
 {
 #if FRAME_CONFIG == HELI_FRAME          // helicopters only use rate controllers for yaw and only when not using an external gyro
     if(!motors.ext_gyro_enabled) {
-	heli_integrated_swash_controller(roll_rate_target_bf, pitch_rate_target_bf); 
+        heli_integrated_swash_controller(roll_rate_target_bf, pitch_rate_target_bf);
         g.rc_4.servo_out = get_heli_rate_yaw(yaw_rate_target_bf);
     }
 #else
@@ -432,8 +348,11 @@ void init_rate_controllers()
 {
    // initalise low pass filters on rate controller inputs
    // 1st parameter is time_step, 2nd parameter is time_constant
-   //rate_roll_filter.set_cutoff_frequency(0.01f, 0.1f);
+   // rate_roll_filter.set_cutoff_frequency(0.01f, 0.1f);
+   // rate_pitch_filter.set_cutoff_frequency(0.01f, 0.1f);
+ #if HELI_CC_COMP == ENABLED
    rate_dynamics_filter.set_cutoff_frequency(0.01f, 4.0f); 
+ #endif
 }
 
 static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t target_pitch_rate)
@@ -444,10 +363,10 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
     int32_t         roll_rate_error, pitch_rate_error;          // simply target_rate - current_rate
     int32_t         roll_output, pitch_output;                  // output from pid controller
     static bool     roll_pid_saturated, pitch_pid_saturated;    // tracker from last loop if the PID was saturated
-
+    
     current_roll_rate = (omega.x * DEGX100);                    // get current roll rate
     current_pitch_rate = (omega.y * DEGX100);                   // get current pitch rate
-
+	
     roll_rate_error = target_roll_rate - current_roll_rate;
     pitch_rate_error = target_pitch_rate - current_pitch_rate;
     
@@ -468,7 +387,7 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
                 roll_i = g.pid_rate_roll.get_i(roll_rate_error, G_Dt);
             } else {
                 roll_i = g.pid_rate_roll.get_leaky_i(roll_rate_error, G_Dt, RATE_INTEGRATOR_LEAK_RATE);
-            }
+            } 
         }
     }
     
@@ -486,46 +405,28 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
                 pitch_i = g.pid_rate_pitch.get_i(pitch_rate_error, G_Dt);  
             } else {
                 pitch_i = g.pid_rate_pitch.get_leaky_i(pitch_rate_error, G_Dt, RATE_INTEGRATOR_LEAK_RATE);
-            }
+            } 
         }
     }
-
+	
 	roll_d = g.pid_rate_roll.get_d(target_roll_rate, G_Dt);
 	pitch_d = g.pid_rate_pitch.get_d(target_pitch_rate, G_Dt);
     
 	roll_ff = g.heli_roll_ff * target_roll_rate;
     pitch_ff = g.heli_pitch_ff * target_pitch_rate;
-    
-    // do piro comp, replaced if (HELI_PIRO_COMP == ENABLED && control_mode <= ACRO) {
-      if (g.piro_comp_enable == 1) {
-        int32_t piro_roll_i, piro_pitch_i;
-        
-        piro_roll_i  = roll_i;
-        piro_pitch_i = pitch_i;
-        
-        Vector2f yawratevector;
-        yawratevector.x     = cos(-omega.z/100);
-        yawratevector.y     = sin(-omega.z/100);
-        yawratevector.normalize();
 
-        roll_i      = piro_roll_i * yawratevector.x - piro_pitch_i * yawratevector.y;
-        pitch_i     = piro_pitch_i * yawratevector.x + piro_roll_i * yawratevector.y;
-        
-        g.pid_rate_pitch.set_integrator(pitch_i);
-        g.pid_rate_roll.set_integrator(roll_i);
-    }
-    
     roll_output = roll_p + roll_i + roll_d + roll_ff;
     pitch_output = pitch_p + pitch_i + pitch_d + pitch_ff;
-
-    // Do cross-coupling compensation for low rpm helis, replaced if (HELI_CC_COMP == ENABLED) {
-    if (g.cc_comp_enable == 1) {
-        //float cc_axis_ratio = 2.0f;
-        //float cc_kp = 0.0002f;      
-        //float cc_kd = 0.127f;  
-        float cc_axis_ratio = g.cc_axis_ratio; // Ratio of compensation on pitch vs roll axes. Number >1 means pitch is affected more than roll
-        float cc_kp = g.cc_kp_term;      // Compensation p term. Setting this to zero gives h_phang only, while increasing it will increase the p term of correction
-        float cc_kd = g.cc_kd_term;       // Compensation d term, scaled. This accounts for flexing of the blades, dampers etc. Originally was (motors.ext_gyro_gain * 0.0001)
+   
+    //  Joly's Codes: Do cross-coupling compensation for low rpm helis, replaced if (HELI_CC_COMP == ENABLED) {
+    // if (g.cc_comp_enable == 1) {
+    #if HELI_CC_COMP == ENABLE 
+        float cc_axis_ratio = 2.0f;
+        float cc_kp = 0.0002f;      
+        float cc_kd = 0.127f;  
+        //float cc_axis_ratio = g.cc_axis_ratio; // Ratio of compensation on pitch vs roll axes. Number >1 means pitch is affected more than roll
+        //float cc_kp = g.cc_kp_term;            // Compensation p term. Setting this to zero gives h_phang only, while increasing it will increase the p term of correction
+        //float cc_kd = g.cc_kd_term;            // Compensation d term, scaled. This accounts for flexing of the blades, dampers etc. Originally was (motors.ext_gyro_gain * 0.0001)
         float cc_angle;
         float cc_total_output;
         uint32_t cc_roll_d;
@@ -566,8 +467,31 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
         // make current outputs old, for next iteration
         motors.last_roll_output  = cc_roll_output;
         motors.last_pitch_output = cc_pitch_output;
-    }
+    #endif //HELI_CC_COMP   
+    
+    // Joly's piro comp, replaced if (HELI_PIRO_COMP == ENABLED && control_mode <= ACRO) {
+    //  option only in acro mode  && control_mode <= ACRO
+    //  if (g.piro_comp_enable == 1 && control_mode <= ACRO) {
+    #if HELI_PIRO_COMP == ENABLED 
+      if (control_mode <= ACRO) {
+        int32_t piro_roll_i, piro_pitch_i;
+        
+        piro_roll_i  = roll_i;
+        piro_pitch_i = pitch_i;
+        
+        Vector2f yawratevector;
+        yawratevector.x     = cos(-omega.z/100);
+        yawratevector.y     = sin(-omega.z/100);
+        yawratevector.normalize();
 
+        roll_i      = piro_roll_i * yawratevector.x - piro_pitch_i * yawratevector.y;
+        pitch_i     = piro_pitch_i * yawratevector.x + piro_roll_i * yawratevector.y;
+        
+        g.pid_rate_pitch.set_integrator(pitch_i);
+        g.pid_rate_roll.set_integrator(roll_i);
+    }
+   #endif  //PIRO_COMP 
+   
     if (labs(roll_output) > 4500){
         roll_output = constrain_int32(roll_output, -4500, 4500);         // constrain output
         roll_pid_saturated = true;                                       // freeze integrator next cycle
@@ -583,20 +507,20 @@ static void heli_integrated_swash_controller(int32_t target_roll_rate, int32_t t
     }
 
     g.rc_1.servo_out = roll_output;
-	g.rc_2.servo_out = pitch_output;
+    g.rc_2.servo_out = pitch_output;
 }
-
+    
 static int16_t
 get_heli_rate_yaw(int32_t target_rate)
 {
     int32_t         p,i,d,ff;               // used to capture pid values for logging
-	int32_t         current_rate;           // this iteration's rate
+    int32_t         current_rate;           // this iteration's rate
     int32_t         rate_error;
     int32_t         output;
     static bool     pid_saturated;          // tracker from last loop if the PID was saturated
 
-    current_rate = (omega.z * DEGX100);                         // get current rate
-
+    current_rate = (omega.z * DEGX100);     // get current rate
+	
     // rate control
     rate_error = target_rate - current_rate;
 
@@ -604,7 +528,7 @@ get_heli_rate_yaw(int32_t target_rate)
     p = g.pid_rate_yaw.get_p(rate_error);
     
     if (pid_saturated){
-        i = g.pid_rate_yaw.get_integrator();                    // Locked Integrator due to PID saturation on previous cycle
+        i = g.pid_rate_yaw.get_integrator();    // Locked Integrator due to PID saturation on previous cycle
     } else {
         if (motors.motor_runup_complete == true){
             i = g.pid_rate_yaw.get_i(rate_error, G_Dt);
@@ -614,7 +538,7 @@ get_heli_rate_yaw(int32_t target_rate)
     }
 
     d = g.pid_rate_yaw.get_d(rate_error, G_Dt);
-
+	
 	ff = g.heli_yaw_ff*target_rate;
 
     output = p + i + d + ff;
@@ -635,7 +559,7 @@ get_heli_rate_yaw(int32_t target_rate)
             Log_Write_PID(CH6_YAW_RATE_KP, rate_error, p, i, d, output, tuning_value);
         }
     }
-
+	
 #endif
 
 	return output;                                              // output control
@@ -646,7 +570,7 @@ get_heli_rate_yaw(int32_t target_rate)
 static int16_t
 get_rate_roll(int32_t target_rate)
 {
-    int32_t p,i,d;                  // used to capture pid values for logging
+    int32_t p,i,d;                  // used to capture pid values for logging  ~REMOVE~
     int32_t current_rate;           // this iteration's rate
     int32_t rate_error;             // simply target_rate - current_rate
     int32_t output;                 // output from pid controller
@@ -656,13 +580,13 @@ get_rate_roll(int32_t target_rate)
 
     // call pid controller
     rate_error  = target_rate - current_rate;
-    p  = g.pid_rate_roll.get_p(rate_error);
+    p           = g.pid_rate_roll.get_p(rate_error);
 
     // get i term
     i = g.pid_rate_roll.get_integrator();
 
     // update i term as long as we haven't breached the limits or the I term will certainly reduce
-    if (!motors.reached_limit(AP_MOTOR_ROLLPITCH_LIMIT) || ((i>0&&rate_error<0)||(i<0&&rate_error>0))) {
+    if (!motors.limit.roll_pitch || ((i>0&&rate_error<0)||(i<0&&rate_error>0))) {
         i = g.pid_rate_roll.get_i(rate_error, G_Dt);
     }
 
@@ -700,13 +624,13 @@ get_rate_pitch(int32_t target_rate)
 
     // call pid controller
     rate_error      = target_rate - current_rate;
-    p   = g.pid_rate_pitch.get_p(rate_error);
+    p               = g.pid_rate_pitch.get_p(rate_error);
 
     // get i term
     i = g.pid_rate_pitch.get_integrator();
 
     // update i term as long as we haven't breached the limits or the I term will certainly reduce
-    if (!motors.reached_limit(AP_MOTOR_ROLLPITCH_LIMIT) || ((i>0&&rate_error<0)||(i<0&&rate_error>0))) {
+    if (!motors.limit.roll_pitch || ((i>0&&rate_error<0)||(i<0&&rate_error>0))) {
         i = g.pid_rate_pitch.get_i(rate_error, G_Dt);
     }
 
@@ -746,7 +670,7 @@ get_rate_yaw(int32_t target_rate)
     i = g.pid_rate_yaw.get_integrator();
 
     // update i term as long as we haven't breached the limits or the I term will certainly reduce
-    if (!motors.reached_limit(AP_MOTOR_YAW_LIMIT) || ((i>0&&rate_error<0)||(i<0&&rate_error>0))) {
+    if (!motors.limit.yaw || ((i>0&&rate_error<0)||(i<0&&rate_error>0))) {
         i = g.pid_rate_yaw.get_i(rate_error, G_Dt);
     }
 
@@ -891,7 +815,7 @@ static void get_circle_yaw()
     // if circle radius is zero do panorama
     if( g.circle_radius == 0 ) {
         // slew yaw towards circle angle
-        nav_yaw = get_yaw_slew(nav_yaw, ToDeg(circle_angle)*100, AUTO_YAW_SLEW_RATE);
+        nav_yaw = get_yaw_slew(nav_yaw, ToDeg(circle_angle)*100, g.yaw_autosrate);  // g.yaw_autosrate def. eq AUTO_YAW_SLEW_RATE
     }else{
         look_at_yaw_counter++;
         if( look_at_yaw_counter >= 10 ) {
@@ -899,7 +823,7 @@ static void get_circle_yaw()
             yaw_look_at_WP_bearing = pv_get_bearing_cd(inertial_nav.get_position(), yaw_look_at_WP);
         }
         // slew yaw
-        nav_yaw = get_yaw_slew(nav_yaw, yaw_look_at_WP_bearing, AUTO_YAW_SLEW_RATE);
+        nav_yaw = get_yaw_slew(nav_yaw, yaw_look_at_WP_bearing, g.yaw_autosrate);  // g.yaw_autosrate def. eq AUTO_YAW_SLEW_RATE
     }
 
     // call stabilize yaw controller
@@ -919,16 +843,16 @@ static void get_look_at_yaw()
     }
 
     // slew yaw and call stabilize controller
-    nav_yaw = get_yaw_slew(nav_yaw, yaw_look_at_WP_bearing, AUTO_YAW_SLEW_RATE);
+    nav_yaw = get_yaw_slew(nav_yaw, yaw_look_at_WP_bearing, g.yaw_autosrate);     // g.yaw_autosrate def. eq AUTO_YAW_SLEW_RATE
     get_stabilize_yaw(nav_yaw);
 }
 
 static void get_look_ahead_yaw(int16_t pilot_yaw)
 {
     // Commanded Yaw to automatically look ahead.
-    if (g_gps->fix && g_gps->ground_course_cd > YAW_LOOK_AHEAD_MIN_SPEED) {
-        nav_yaw = get_yaw_slew(nav_yaw, g_gps->ground_course_cd, AUTO_YAW_SLEW_RATE);
-        get_stabilize_yaw(wrap_360_cd(nav_yaw + pilot_yaw));   // Allow pilot to "skid" around corners up to 45 degrees
+    if (g_gps->fix && g_gps->ground_speed_cm > g.yaw_laminspd){                    // g.yaw_laminspd def. eq YAW_LOOK_AHEAD_MIN_SPEED
+        nav_yaw = get_yaw_slew(nav_yaw, g_gps->ground_course_cd, g.yaw_autosrate); // g.yaw_autosrate def. eq AUTO_YAW_SLEW_RATE
+        get_stabilize_yaw(wrap_360_cd(nav_yaw + pilot_yaw));                       // Allow pilot to "skid" around corners up to 45 degrees
     }else{
         nav_yaw += pilot_yaw * g.acro_p * G_Dt;
         nav_yaw = wrap_360_cd(nav_yaw);
@@ -1023,6 +947,20 @@ void throttle_accel_deactivate()
     throttle_accel_controller_active = false;
 }
 
+// set_throttle_takeoff - allows parents to tell throttle controller we are taking off so I terms can be cleared
+static void
+set_throttle_takeoff()
+{
+    // set alt target
+    if (controller_desired_alt < current_loc.alt) {
+        controller_desired_alt = current_loc.alt + 20;
+    }
+    // clear i term from acceleration controller
+    if (g.pid_throttle_accel.get_integrator() < 0) { 
+       g.pid_throttle_accel.reset_I();
+    }
+}
+ 
 // get_throttle_accel - accelerometer based throttle controller
 // returns an actual throttle output (0 ~ 1000) to be sent to the motors
 static int16_t
@@ -1050,27 +988,27 @@ get_throttle_accel(int16_t z_target_accel)
 
     // separately calculate p, i, d values for logging
     p = g.pid_throttle_accel.get_p(z_accel_error);
-    // freeze I term if we've breached throttle limits
-    if( motors.reached_limit(AP_MOTOR_THROTTLE_LIMIT) ) {
-        i = g.pid_throttle_accel.get_integrator();
-    }else{
-        i = g.pid_throttle_accel.get_i(z_accel_error, .01f);
+
+    // get i term
+    i = g.pid_throttle_accel.get_integrator();
+
+    // update i term as long as we haven't breached the limits or the I term will certainly reduce
+    if ((!motors.limit.throttle_lower && !motors.limit.throttle_upper) || (i>0&&z_accel_error<0) || (i<0&&z_accel_error>0)) {
+         i = g.pid_throttle_accel.get_i(z_accel_error, .01f);
     }
     d = g.pid_throttle_accel.get_d(z_accel_error, .01f);
 
-    //
-    // limit the rate
 #if FRAME_CONFIG == HELI_FRAME
-    if (ap.takeoff_complete == true){
+    if (ap.takeoff_complete && (throttle_mode != THROTTLE_LAND)){
         output =  constrain_float(p+i+d+g.throttle_cruise, g.throttle_min, g.throttle_max);
     } else {
         // Avoid harshing the mechanics pushing into the ground
         // stab_col_min should gently push down on the ground
-        output =  constrain_float(p+i+d+g.throttle_cruise, motors.stab_col_min*10, motors.stab_col_max*10);
+        output =  constrain_float(p+i+d+g.throttle_cruise, motors.stab_col_min*10, g.throttle_max);
     }   
 #else 
     output =  constrain_float(p+i+d+g.throttle_cruise, g.throttle_min, g.throttle_max);
-#endif // HELI_FRAME
+#endif // HELI_FRAME 
 
 #if LOGGING_ENABLED == ENABLED
     // log output if PID loggins is on and we are tuning the yaw
@@ -1186,7 +1124,7 @@ get_throttle_rate(float z_target_speed)
     static float z_rate_error = 0;   // The velocity error in cm.
     static float z_target_speed_filt = 0;   // The filtered requested speed
     float z_target_speed_delta;   // The change in requested speed
-    int32_t p,i,d;      // used to capture pid values for logging
+    int32_t p;          // used to capture pid values for logging
     int32_t output;     // the target acceleration if the accel based throttle is enabled, otherwise the output to be sent to the motors
     uint32_t now = millis();
 
@@ -1206,19 +1144,11 @@ get_throttle_rate(float z_target_speed)
     }
     last_call_ms = now;
 
-    // separately calculate p, i, d values for logging
-    p = g.pid_throttle_rate.get_p(z_rate_error);
-
-    // freeze I term if we've breached throttle limits
-    if(motors.reached_limit(AP_MOTOR_THROTTLE_LIMIT)) {
-        i = g.pid_throttle_rate.get_integrator();
-    }else{
-        i = g.pid_throttle_rate.get_i(z_rate_error, .02);
-    }
-    d = g.pid_throttle_rate.get_d(z_rate_error, .02);
+    // calculate p
+    p = g.pid_throttle_rate.kP() * z_rate_error; 
 
     // consolidate and constrain target acceleration
-    output += p+i+d;
+    output += p;
     output = constrain_int32(output, -32000, 32000);
 
 #if LOGGING_ENABLED == ENABLED
@@ -1227,7 +1157,7 @@ get_throttle_rate(float z_target_speed)
         pid_log_counter++;
         if( pid_log_counter >= 10 ) {               // (update rate / desired output rate) = (50hz / 10hz) = 5hz
             pid_log_counter = 0;
-            Log_Write_PID(CH6_THROTTLE_RATE_KP, z_rate_error, p, i, d, output, tuning_value);
+            Log_Write_PID(CH6_THROTTLE_RATE_KP, z_rate_error, p, 0, 0, output, tuning_value);
         }
     }
 #endif
@@ -1285,9 +1215,11 @@ get_throttle_althold(int32_t target_alt, int16_t min_climb_rate, int16_t max_cli
 static void
 get_throttle_althold_with_slew(int32_t target_alt, int16_t min_climb_rate, int16_t max_climb_rate)
 {
-    // limit target altitude change
-    controller_desired_alt += constrain_float(target_alt-controller_desired_alt, min_climb_rate*0.02f, max_climb_rate*0.02f);
-
+    float alt_change = target_alt-controller_desired_alt;
+    // adjust desired alt if motors have not hit their limits
+    if ((alt_change<0 && !motors.limit.throttle_lower) || (alt_change>0 && !motors.limit.throttle_upper)) {
+        controller_desired_alt += constrain_float(alt_change, min_climb_rate*0.02f, max_climb_rate*0.02f);
+    } 
     // do not let target altitude get too far from current altitude
     controller_desired_alt = constrain_float(controller_desired_alt,current_loc.alt-750,current_loc.alt+750);
 
@@ -1300,7 +1232,10 @@ get_throttle_althold_with_slew(int32_t target_alt, int16_t min_climb_rate, int16
 static void
 get_throttle_rate_stabilized(int16_t target_rate)
 {
-    controller_desired_alt += target_rate * 0.02f;
+    // adjust desired alt if motors have not hit their limits
+    if ((target_rate<0 && !motors.limit.throttle_lower) || (target_rate>0 && !motors.limit.throttle_upper)) {
+        controller_desired_alt += target_rate * 0.02f;
+    } 
 
     // do not let target altitude get too far from current altitude
     controller_desired_alt = constrain_float(controller_desired_alt,current_loc.alt-750,current_loc.alt+750);
@@ -1323,23 +1258,46 @@ get_throttle_land()
     }else{
         get_throttle_rate_stabilized(-abs(g.land_speed));
 
-        // detect whether we have landed by watching for minimum throttle and now movement
-        if (abs(climb_rate) < 20 && (g.rc_3.servo_out <= get_angle_boost(g.throttle_min) || g.pid_throttle_accel.get_integrator() <= -150)) {
-            if( land_detector < LAND_DETECTOR_TRIGGER ) {
+        // disarm when the landing detector says we've landed and throttle is at min (or we're in failsafe so we have no pilot thorottle input)
+        if( ap.land_complete && (g.rc_3.control_in == 0 || ap.failsafe_radio) ) {
+            init_disarm_motors();
+        }
+    }
+}
+
+// reset_land_detector - initialises land detector
+static void reset_land_detector()
+{
+    set_land_complete(false);
+    land_detector = 0;
+}
+
+// update_land_detector - checks if we have landed and updates the ap.land_complete flag
+// returns true if we have landed
+static bool update_land_detector()
+{
+    // detect whether we have landed by watching for low climb rate and minimum throttle
+    if (abs(climb_rate) < 20 && motors.limit.throttle_lower) {
+        if (!ap.land_complete) {
+            // run throttle controller if accel based throttle controller is enabled and active (active means it has been given a target)
+            if( land_detector < LAND_DETECTOR_TRIGGER) {
                 land_detector++;
             }else{
                 set_land_complete(true);
-                if( g.rc_3.control_in == 0 || ap.failsafe_radio ) {
-                    init_disarm_motors();
-                }
-            }
-        }else{
-            // we've sensed movement up or down so decrease land_detector
-            if (land_detector > 0 ) {
-                land_detector--;
-            }
+                land_detector = 0; 
+           }
+        }
+    }else{
+        // we've sensed movement up or down so reset land_detector
+        land_detector = 0;
+        if(ap.land_complete) {
+            set_land_complete(false);
         }
     }
+
+    // return current state of landing
+    return ap.land_complete;
+
 }
 
 // get_throttle_surface_tracking - hold copter at the desired distance above the ground
@@ -1360,7 +1318,10 @@ get_throttle_surface_tracking(int16_t target_rate)
     }
     last_call_ms = now;
 
-    target_sonar_alt += target_rate * 0.02f;
+    // adjust target alt if motors have not hit their limits
+    if ((target_rate<0 && !motors.limit.throttle_lower) || (target_rate>0 && !motors.limit.throttle_upper)) {
+        target_sonar_alt += target_rate * 0.02f;
+    } 
 
     distance_error = (target_sonar_alt-sonar_alt);
     sonar_induced_slew_rate = constrain_float(fabsf(g.sonar_gain * distance_error),0,THR_SURFACE_TRACKING_VELZ_MAX);
